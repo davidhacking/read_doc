@@ -127,7 +127,64 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 - 存储的结构
 <img src="store_logic.png" width="800" height="auto"/>
 
-- 
+- region-size 可能一个region会在多个regionServer上，也可能一个regionServer上有多个region，比如三台机有12个region，第一台可能有3个，第二个有4个，第三台有5个，当后面两台停止工作了，第一台机有12个
+
+- region-regionServer Assignment region是如何赋给regionserver的
+	1. Master在startup的时候调用AssignmentManager
+	2. AssignmentManager check META，就是region和regionserver的对应关系
+	3. 如果regionserver不可用了就由LoadBalancerFactory随机选取一个regionserver把region赋出去
+	4. META会在regionserver的选取和regionserver start的时候被修改
+- Failover 当regionServer不可用时region-regionServer Assignment就会启动
+- [LoadBalancer](http://hbase.apache.org/0.94/book/master.html#master.processes.loadbalancer) region可能会被LoadBalancer给移除
+- 数据冗余策略
+	1. First replica is written to local node
+	2. Second replica is written to another node in same rack
+	3. Third replica is written to a node in another rack (if sufficient nodes)
+- region split 可以独立在一个regionServer上run，不需要master的参与，regionServer自己可以分离一个region并且把这个split离线，之后将相关信息写到META表中，最后把这些信息告诉master，[手动分离region](http://hbase.apache.org/0.94/book/important_configurations.html#disable.splitting)
+
+- HFile
+	- view HFile ${HBASE_HOME}/bin/hbase org.apache.hadoop.hbase.io.hfile.HFile -v -f hdfs://hadoop-master:8020/hbase/some_file
+	- [HFile in hdfs](http://hbase.apache.org/0.94/book/trouble.namenode.html#trouble.namenode.hbase.objects)
+- Compaction 有两种Compaction，一种是minor一种是major，minor只会将一个store上的所有小的storefile合成一个，major做删除墓碑记录。有时minor会转化成major。一次major compaction可能会把一个store上的所有数据重新写一遍，这是不可避免的，major在一个大型系统上可能需要手动触发
+- Compaction File Selection算法，官网有很多例子，表示没看懂是个什么选择原理，貌似需要去bigtable论文中看看什么原理
+- [bulkload的方式向hbase导入数据](https://my.oschina.net/leejun2005/blog/187309)
+
+### HDFS
+- namenode 维护文件系统的元数据metadata
+- datanode 存储HDFS的block
+- [一坨filter](http://hbase.apache.org/0.94/book/thrift.html)
+### performance tuning，我也开始学着官方文档装b了，其实就是性能调优
+- Set swappiness to 0，为什么？因为这样可以避免让kernel将运行着的进程换到磁盘上
+- bigger heap for good block cache hit rate and memstore efficient flush, but for longer GC 
+
+### Java GC - CMS(concurrent mark and sweep)
+- Java heap 可以分成两种 young or old
+- for young -XX:+UseParNewGC(parallel new gc); for old -XX:+UseConcMarkSweepGC
+- parallel new gc的工作方式
+	1. young generation分为 eden（所有刚new的对象），survivor-0（from-space），survivor-1（to-space），并行GC会每隔一段时间 check一次eden是否满了，满了就进行stop-the-world的GC
+	2. stop-the-world的GC：从eden和from-space中copy所有的活着的对象到to-space中，交换from-sapce和to-space
+	3. 这里会进行计数如果在每一轮的GC过程中一些被往返copy了n次的对象会被移到old generation
+- CMS的工作方式
+	1. initial mark（STW）暂停整个程序从thread stacks开始标记，这个mark称为root mark
+	2. concurrent mark 并行的从root mark开始向下追溯标记
+	3. concurrent preclean 并行的开始预清理，这时候可以发现哪些是垃圾，哪些是需要移至old generation的对象
+	4. remark（STW）暂停整个程序的葱root mark开始重新标记
+	5. concurrent-sweep 并发清理remark过程中标记的所有垃圾
+- CMS的失败处理方式，这两点很危险
+	1. old generation空间不够导致GC失败，就设置这个参数-XX:CMSInitiatingOccupancyFraction比如60%-70%，就是说在old generation还剩60%-70%的空间的时候就开始GC
+	2. old generation出现内存碎片化，这个时候就需要stop-the-world开始compact space to contiguous
+- 如果推测CMS的GC错误是什么导致的，如果你已经调整小了参数但是GC pause还是很长，明显就是第二种内存碎片化了
+- 打开一些统计debug
+
+<img src="fls_statistics.png" width="500" height="auto" />
+- 平凡的write容易造成fragmentation，基于LRU的read不容易造成
+<img src="cheese.png" width="500" height="auto" />作者好坏坏，看着我都饿了
+- MSLAB MemStore Local Allocation Buffer
+	- 设置hbase.hregion.memstore.mslab.enabled to true可以缓解内存碎片，但是很容易造成OOME
+	- 所以需要明白原理，貌似是用了一个atomic的buffer叫做chunk，一个chunk 2M，然后KeyValue写的时候先写到chunk里，在把chunk的ref给memstore，flush memstore就清掉chunk就可以了，我说了些啥？[link](http://www.slideshare.net/cloudera/hbase-hug-presentation)
+
+
+
 ### vocabulary
 - Monotonically单调的
 - metric_type计量类型
@@ -135,7 +192,16 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 - Smackdown打倒
 - spit吐出
 - sink下沉
-- Roll
+- Roll 滚动
+- rack 机房鸡架
+- unaided 独立的
+- dread 恐惧
+- sucks 吸，oh life sucks！我不信是吸的意思，应该是爆炸的意思💥
+- hypothsize 推测
+- recap 总结
+- seldom 很少
+- chunk 区间，块
+- swiss 瑞士
 
 
 
