@@ -40,13 +40,13 @@
 - 读事务会向这样：
 	1. 打开一个scanner
 	2. 得到当前的readpoint
-	3. 过滤出自己所得到的keyvalues，过滤规则是在memstore timestamp>readpoint
+	3. 过滤出自己所得到的keyvalues，过滤规则是在memstore timestamp<=readpoint
 	4. 关闭scanner
 - 如果你对上述有疑问的话，说明并发编程功底不错。有一下几点保证上处的正确性：
 	- hbase保证所有的事务的提交都是串行的。因为hbase中一个事务一般很短。
 	- 只有提交了的事务才对读可见
 	- hbase会记录所有未提交的事务，保证提交顺序一定是writenumber小的提交在前面
-- <span style="color:red;">[官方](http://hbase.apache.org/0.94/book/architecture.html)hbase保证强一致性，我理解hbase不保证一致性，而是最终一致性</span>，额。。。，所以每个region的MVCC只会在每个regionserver上。这里有必要说一些什么是一致性，对于一个特定的rowkey进行的put操作，要么对所有人可见，要么对none可见。从[hbase代码](https://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Consistency.html)上看支持两种一致性：
+- <span style="color:red;">[官方](http://hbase.apache.org/0.94/book/architecture.html)hbase保证强一致性，我理解hbase不保证一致性，而是最终一致性</span>，额。。。，所以每个region的MVCC只会在每个regionserver上。这里有必要说一下什么是一致性，对于一个特定的rowkey进行的put操作，要么对所有人可见，要么对none可见。从[hbase API 文档](https://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Consistency.html)上看支持两种一致性：
 	1. 强一致性：需要读写的数据只在一台机上
 	2. Timeline的一致性，这种一致性将不能看到最近更新的数据
 - compactions，就是之前提到的major compactions，会把多个小的store file(会把memstore刷到磁盘上)组合起来，并且把垃圾清理掉
@@ -54,7 +54,7 @@
 ### [HBase and Schema Design](http://hbase.apache.org/0.94/book/number.of.cfs.html)
 - 当column family的个数大于两个或三个的时候hbase的性能并不好
 - ∆ flushing and compaction在column family很多的时候会导致许多不必要的io开销，因为这两个操作时基于每个region server的，所以最好设计成每次只读一个colmn family
-- If ColumnFamilyA has 1 million rows and ColumnFamilyB has 1 billion rows, ColumnFamilyA's data will likely be spread across many, many regions (and RegionServers). 这会导致大量的对 ColumnFamilyA 的scans操作导致很差的性能
+- If ColumnFamilyA has 1 million rows and ColumnFamilyB has 1 billion rows, ColumnFamilyA's data will likely be spread across many regions (and RegionServers). 这会导致大量的对 ColumnFamilyA 的scans操作导致很差的性能
 -  avoid using a timestamp or a sequence as the row-key.因为这样的数据会落在同一个region server上
 - 尽量使行键和列族短小，[这很重要](http://hbase.apache.org/0.94/book/regions.arch.html#keyvalue)
 - 把rowkey转成bytes，例如一个string每个字符占一个byte但是转成long型的数则只占8个byte，可以小三倍的size
@@ -85,7 +85,6 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 - 每个hbase单元的存储最好不要超过10M如果是objects的话可以到50M [object store](https://docs.transwarp.io/4.7/goto?file=HyperbaseManual.html#object-store-chapter)
 - [counters](http://cloudfront.blogspot.sg/2012/06/hbase-counters-part-i.html)额，看了下api文档，过时了不再维护了，还是用[LongAdder](http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/atomic/LongAdder.html?is-external=true)吧。他们两都是提供对一个row的column做原子的加操作
 - 对于delete的cells使用get或者scan操作还是可以得到的，但是会有[delete markers](http://hbase.apache.org/0.94/book/cf.keep.deleted.html)，亲测有效，delete之后只需要在scan的时候加入这样的参数{RAW => true, VERSIONS => 3}即可
-- <span style="color:red;"></span>
 
 ### [secondary index](http://hbase.apache.org/0.94/book/secondary.indexes.html)
 - 先思考这么一个问题，rowkey是这样user-timestamp，这可以很方便的select by user，但这对于select by time则不容易
@@ -105,12 +104,12 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 - Access Control没看，人工scan了一下，发现权限的控制还是很细的
 
 ### [architecture](http://hbase.apache.org/0.94/book/architecture.html)
-- scan -ROOT- .META. 查看region server等信息请使用scan 'hbase:meta'
+- scan -ROOT- .META. 查看region server等信息请使用scan 'hbase:meta'，可以使用thrift的PrefixFilter过滤相关表
 - [有用的filter](http://hbase.apache.org/0.94/book/client.filter.html)，filter工作在服务器端，这个比较好
-- HMaster一般运行在namenode
+- HMaster一般运行在namenode，包含一下两个组件
 	- LoadBalancer
 	- CatalogJanitor周期性的check and clean hbase:meta表
-- HregionServer一般运行在datanode
+- HregionServer一般运行在datanode，包含以下几个组件
 	- CompactSplitThread找到split然后做镜像压缩
 	- MajorCompactionChecker check是不是需要major compaction
 	- MemStoreFlusher 周期性的把MemStore to StoreFiles.
@@ -147,7 +146,7 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 	- [HFile in hdfs](http://hbase.apache.org/0.94/book/trouble.namenode.html#trouble.namenode.hbase.objects)
 - Compaction 有两种Compaction，一种是minor一种是major，minor只会将一个store上的所有小的storefile合成一个，major做删除墓碑记录。有时minor会转化成major。一次major compaction可能会把一个store上的所有数据重新写一遍，这是不可避免的，major在一个大型系统上可能需要手动触发
 - Compaction File Selection算法，官网有很多例子，表示没看懂是个什么选择原理，貌似需要去bigtable论文中看看什么原理
-- [bulkload的方式向hbase导入数据](https://my.oschina.net/leejun2005/blog/187309)
+- [bulkload的方式向hbase导入数据](https://my.oschina.net/leejun2005/blog/187309), [官方文档](http://hbase.apache.org/0.94/book/arch.bulk.load.html)
 
 ### HDFS
 - namenode 维护文件系统的元数据metadata
@@ -168,7 +167,7 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 	1. initial mark（STW）暂停整个程序从thread stacks开始标记，这个mark称为root mark
 	2. concurrent mark 并行的从root mark开始向下追溯标记
 	3. concurrent preclean 并行的开始预清理，这时候可以发现哪些是垃圾，哪些是需要移至old generation的对象
-	4. remark（STW）暂停整个程序的葱root mark开始重新标记
+	4. remark（STW）暂停整个程序的从root mark开始重新标记
 	5. concurrent-sweep 并发清理remark过程中标记的所有垃圾
 - CMS的失败处理方式，这两点很危险
 	1. old generation空间不够导致GC失败，就设置这个参数-XX:CMSInitiatingOccupancyFraction比如60%-70%，就是说在old generation还剩60%-70%的空间的时候就开始GC
@@ -177,12 +176,31 @@ public static byte[][] getHexSplits(String startKey, String endKey, int numRegio
 - 打开一些统计debug
 
 <img src="fls_statistics.png" width="500" height="auto" />
-- 平凡的write容易造成fragmentation，基于LRU的read不容易造成
+- 频繁地write容易造成fragmentation，基于LRU的read不容易造成
 <img src="cheese.png" width="500" height="auto" />作者好坏坏，看着我都饿了
+
 - MSLAB MemStore Local Allocation Buffer
 	- 设置hbase.hregion.memstore.mslab.enabled to true可以缓解内存碎片，但是很容易造成OOME
 	- 所以需要明白原理，貌似是用了一个atomic的buffer叫做chunk，一个chunk 2M，然后KeyValue写的时候先写到chunk里，在把chunk的ref给memstore，flush memstore就清掉chunk就可以了，我说了些啥？[link](http://www.slideshare.net/cloudera/hbase-hug-presentation)
+- 有关性能的参数调整
+	- Table RegionSize每张表都能设置不同的regionsize，这样做分布式计算的时候会更好吧
+	- Bloom Filters有三种模式，NONE，ROW，ROWCOL，第三种的意思是以row+colfamily+qualifier的方式做为bloom filter的key
+	- BlockSize的config和每个column family有关，对于cell value是比较大的就需要设置更大的BlockSize，默认64K。BlockSize和StoreFileIndex数目成反比，这个显而易见
+	- 生产系统由于数据量巨大需要做[压缩](http://hbase.apache.org/0.94/book/compression.html)，压缩是表示在磁盘上是压缩的，在内存中和在传输过程中是inflated的
+	- 为了更好的写hbase的table，在一开始table只有一个region，当region越来越大会进行split，可以一开始就见很多的region，像这样
+	```java
+	HbaseAdmin.createTable(table, startKey, endKey, numberOfRegions);
+	```
+	或者
+	```java
+	HbaseAdmin.createTable(table, splits);
+	```
+	- 使用hclient对hbase做大量数据的写入时需要注意set autoflush=false;因为htable.add(Put) and htable.add( <List> Put)这两个操作在autoflush=true都会瞬间写到hbase那边，写大量数据的时候对写的性能不好。set成false，client会先写writeBuffer，写满了再进行flush，也可以自己调用flushCommits，当htable.close也会flushCommits
+	- hclient也可以设置writeToWAL(false)，不写WAL对写的性能也是有帮助的，但是当你的数据本来就是在集群上分布的很均匀，帮助不是很大
+	- 如果使用MR的方式将数据导入hbase的话，能省略reducer的比较好的，因为这样shuffle的数据不会写在磁盘上而浪费时间。
 
+### [TroubleShooting](http://hbase.apache.org/0.94/book/trouble.html)
+	- 这个就具体问题具体分析吧，现在hbase的文档就当这了，下面看hdfs
 
 
 ### vocabulary
