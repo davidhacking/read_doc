@@ -84,3 +84,51 @@
 	- 对sync_res.sh更新后可能会失去可执行权限，这将导致手动更新功能出错
 	- 虽然excel文件和索引都在/home/qcpub下，但是运行的脚本实际在/home/david/xlsx_search/genXlsData.py中，执行时david用户访问qcpub用户的文件会产生权限问题
 
+# 主要功能函数
+### 前端
+- 1. 初始数据主要是有在请求页面时完成的 
+```javascript
+var data = {{data | safe}};
+```
+- 2. angularjs的主要代码需要写在app.controller中
+- 3. 分页使用angularjs实现相关函数
+```javascript
+//初始化
+var paginationInit = function(viewby, totalItems)
+//设置页码
+$scope.setPage = function (pageNo)
+//用户选择页码触发函数
+$scope.pageChanged = function()
+
+```
+- 4. 在下发弹出文件关联树的collapse方法
+```javascript
+//这里需要改变table的css实现
+$scope.collapseBtnClick = function(index) {
+	$("#collapse_trigger" + index).click();
+	if ($("#td_collapse" + index).hasClass('borderClass')) {
+		$("#td_collapse" + index).removeClass('borderClass');
+	} else {
+		$("#td_collapse" + index).addClass('borderClass')
+	}
+};
+/*
+较为复杂的函数
+这里是一个二级树的展开函数，涉及到数据请求部分和树的展开
+传入的参数主要是为了标识collapse按钮所在位置，因为ng-repeat语句太多了
+*/
+$scope.collapseTree = function(id, realIndex, type, index, filename)
+```
+- 5. 公共函数
+```javascript
+//url: 数据请求的url，data：数据，successFunc：请求成功执行的函数，failFunc：请求失败执行的函数
+var myPost = function(url, data, successFunc, failFunc);
+//进度条控制函数
+startLoading(); closeLoading();
+//比alert好看些的弹窗函数使用artDialog实现
+var myAlert = function(title, msg)
+```
+### 后端
+- 1. xxx
+- 2. xxx
+
