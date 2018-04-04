@@ -127,6 +127,7 @@ startLoading(); closeLoading();
 //比alert好看些的弹窗函数使用artDialog实现
 var myAlert = function(title, msg)
 ```
+
 ### 后端 web文件夹中的文件含有较少的逻辑部分，主要提供controller的作用
 - 1. svn_tools.py 对pysvn进行了封装提供了一些系统需要的功能函数，具体每个函数有注释
 - 2. web.version_list.excelSearch 提供了excel的搜索功能，通过load xlsx_search/genXlsData.py来进行搜索，而genXlsData.py主要提供getAll()和search()两个函数，getAll()负责对这个excel资源进行索引
