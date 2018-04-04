@@ -99,7 +99,6 @@ var paginationInit = function(viewby, totalItems)
 $scope.setPage = function (pageNo)
 //用户选择页码触发函数
 $scope.pageChanged = function()
-
 ```
 - 4. 在下发弹出文件关联树的collapse方法
 ```javascript
