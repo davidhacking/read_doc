@@ -69,7 +69,9 @@
 
 ### Flask
 
-- flask中同样用threading.local解决request问题
+- [flask中同样用threading.local解决request问题](https://www.zlovezl.cn/articles/charming-python-start-from-flask-request/)
+  - 利用werkzeug库提供的LocalStack方法，实现在不同的线程和协程中的对象值是不同的
+  - LocalStack通过检测当前线程或协程的id，并使用一个dict实现查找方法
 
 ### Gunicorn
 
@@ -84,6 +86,30 @@
 
 - 可以用来动态定义一个类例如：type('class name', (object, ), {'property': 'value', 'func': lambda x: x})
 
+### partial
+
+将以后函数包装一遍，达到固化了已有函数的参数，然后返回一个新的函数的目的
+
 ### Annotation
 
 - 装饰器，可以用于实现log和timeit等功能，相当于面向切面编程
+
+## python3
+
+### protobuf
+
+- install
+  - 选择版本，https://github.com/protocolbuffers/protobuf/releases
+  - 安装protoc，例如：[windows](https://github.com/protocolbuffers/protobuf/releases/download/v3.7.0/protoc-3.7.0-win64.zip)
+  - python3 setup.py build, python3 setup.py install
+- 编码
+  - 1byte，1-15，2bytes，16-2047，把小的标签值分配给常用的消息，大的给不常用的这样可以减小消息大小
+- 字段类型
+  - repeated，list
+  - reserved，预留标签
+- 消息类型
+  - oneof，限定只有一个字段生效
+  - Any，嵌套式类型
+
+- rpc
+  - 
