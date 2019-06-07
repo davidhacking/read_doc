@@ -2,7 +2,7 @@
 - hbae是什么：Sparse(稀疏存储的), Consistent, Distributed, Multidimensional, Sorted map.
 ### [Physical View](http://hbase.apache.org/0.94/book/physical.view.html)
 - 从概念上hbase是一个存储一行一行记录的东西，物理上是按照每个col family存储的。
-- 存储是按照timestamp的降序排列的，如果在某个col上是没有值而在同一行的另一个col上是有值的则不会存储没指的那个cell，所以我想其实hbase存储是使用用户的rowkey加上timestamp存储的。
+- 存储是按照timestamp的降序排列的，如果在某个col上是没有值而在同一行的另一个col上是有值的则不会存储没值的那个cell，所以我想其实hbase存储是使用用户的rowkey加上timestamp存储的。
 - row的存储是按照字典升序排列的
 - column family需要使用可printable的字母表示，而qualifier不需要只需要byte就行了，而且qualifier可以在需要的时候就增加，即时table is enable
 - 由于一个column family的tunings and storage的声明在定义的时候就已经完成了，而且一个column family的数据都存储在一起，所以最好一个column family的数据都是格式一样的较好

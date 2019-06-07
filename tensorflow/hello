@@ -1,0 +1,19 @@
+# tensorflow
+    - data and data rule on edges
+    - operation on vertex
+# [install](https://www.tensorflow.org/install)
+# hello
+    - premador_estimator根据花的茎和花瓣预测花朵，使用ddn分类器
+# [Estimators](https://www.tensorflow.org/programmers_guide/estimators)高层次的api
+
+# trainer
+    - Inception V3 model 准确率高
+    - MobileNet 轻量高效 准确率不高
+        - bottleneck一个非正式称为，最后的分类层的倒数第二层
+        - training accuracy训练准确率
+        - validation accuracy从不同组选的图片属于不同的集合
+        - cross entroy交叉熵 学习过程的失败函数情况
+
+# monitor
+    - tersorboard
+
