@@ -111,5 +111,13 @@
   - oneof，限定只有一个字段生效
   - Any，嵌套式类型
 
-- rpc
-  - 
+
+## gevent
+
+不要在windows上使用gevent，[一个有趣的Issue](https://github.com/gevent/gevent/issues/1453)
+
+每天看一个Issue避免自己踩坑
+
+如何让桌面应用程序通过web浏览器登入，在登入成功后跳回来？桌面应用通过启动一个本地http server监听
+
+### monkey patch
