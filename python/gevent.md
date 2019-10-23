@@ -2,7 +2,13 @@
 
 - 阅读源码的方法：借助git阅读，先切到最开始的版本（tag），再读每个版本的diff
   
-- 有文档则先读文档，然后读test，直接读整个项目的话，不了解作者的设计思路会云里雾里的
+- 有文档则先读文档（每个tag的changes），然后读test，直接读整个项目的话，不了解作者的设计思路会云里雾里的
+  
+  - 获取所有按version排序的tag
+  
+    ```bash
+    git tag --sort=version:refname
+    ```
   
   - 获取当前version的上一个version
   
@@ -16,8 +22,19 @@
     git log --reverse | head -n 1
     ```
   
-- 阅读源码的好处：可以体验一波别人都是怎么骚断腿地用python
+- source tree对比版本
+
+  ![1568708695212](img\source_tree.png)
+
+- 阅读源码的好处
+
+  - 可以体验一波别人都是怎么骚断腿地用python（newsock = type(self)(sock) # 包装sock成GreenSocket，patch）
+  - 别人已经造好的轮子，为我所用（比如：如何写个python后门）
+  - 通过优秀源码学习，别通过google出来的博客学习地更深入（调试使用%r）
+  - 了解大牛是在python版本更迭中，如何兼容不同版本的python的（2.4的socket._fileobject的close方法实现与2.6的不同，2.4的close前没有flush，令人头秃的问题）
+
 - linux mutex（互斥锁），只有获取了互斥量的native线程能执行
+
 - GIL，CPython实现的时候，防止native thread同时执行bytecode的一个mutex，CPython实现的内存管理是非内存安全的。而且，GIL的实现可以概括为以下代码，每个native线程执行前都需要获取一发GIL锁。为什么不解决呢？因为某些库已经依赖了，所以就犹如一个bug般存在
 
 ```python
@@ -67,6 +84,9 @@ while True:
 - 以前在网易的时候服务器就是用libevent+python写的，python负责逻辑，C++写引擎（游戏引擎的某些库服务端也需要用），当时C++提供python的timer库非常好用，也是封装libevent实现的，当时找了一下，python的timer居然是用threading实现的，就想自己去封装一把，然后libevent需要main loop运行，自己就放弃了
 - 不但要写正常功能的测试，还要写异常功能的测试，保证代码在正常情况和异常情况都是符合预期的
   - 例如：对于monkey patch的测试，基本把socket库全测试了一遍，包括：urllib2，socket监听等等
+- 关于if elif else的判断问题，当有很多情况需要判断时，首先应该将筛选条件分配，最外面的判断主分支应该是最能区分情况的分支，每个逻辑分支里面再写分支逻辑判断、
+- 很多tag的版本其实都是在优化代码和修复bug，并没有做新功能
+- 看完两个三个tag后，不经陷入思考，一共有74个tag，假设每天可以看1个tag也需要74天才能看完，所以如果想快的话可以跳过小版本的tag，直接对别大版本的tag看，对应的changes也需要自己合并以后看
 
 ## initial commit
 
@@ -76,6 +96,12 @@ while True:
 
     - 协程其实很好理解，只要把它看做是函数就可以了，只是函数的调用栈是系统控制的，协程的调用栈是程序控制的
     - 基于libevent的NIO需要在应用程序中显示的调用event_dispatch（现在已经叫event_base_dispatch了），gevent想屏蔽调这个调用
+
+- libevent
+
+    - time事件，把事件按触发的时间顺序排列，用小顶堆实现
+    - read事件，可读事件很简单，缓冲区有数据可读
+    - write事件，可写事件只能在需要写的时候，把事件进行注册，当缓冲区低于某个水位线就进行写
 
 - gevent的执行流程可以描述成：执行一段代码（用户定义的协程），通过Hub.switch一次选取一些ready的事件，并执行这些ready事件的触发函数，再把程序控制权交给用户自定义的协程，如果用户自定义的协程不通过switch方法把程序控制权交给gevent，那么gevent就会卡住
 
@@ -107,9 +133,11 @@ while True:
 
 - [gevent是如何隐藏libevent的main loop的？](https://blog.csdn.net/windeal3203/article/details/52770759)调用libevent时，实际是应用程序有一个main loop，在这个main loop里，libevent select出ready的event，触发之前定义的处理函数运行，隐藏掉main loop之后呢？答案就隐藏在Hub.switch中
 
-- gevent.Hub，switch，协程的原则：dont call switch it，Hub.switch把run函数包装在一个协程中运行，而run函数本身只把event进行dispatch
+- gevent.Hub，switch，协程的原则：dont call switch it
 
+    - Hub.switch把run函数包装在一个协程中运行，而run函数本身只把event进行dispatch
     - 校验当前协程是否为Hub初始化所定义的run函数所在的协程，run函数所在的协程无法切换到本身
+    - run函数使用while True的方式运行，所以当别的协程运行完切回来，会继续event_dispatch
 
 - core.timer，通过libevent的evtimer_set实现，通过timer定义的协程运行的时机，一定是在调用Hub.switch之后
 
@@ -119,7 +147,7 @@ while True:
     - 调用hub.switch切换，该方法会唤起timer的执行
     - 调用sleep(0)实际就是调用了一次hub.switch，之前排队的协程都会被依次执行，最后切换回当前协程
 
-- gevent.spawn，通过timer和greenlet实现，将function包装成greenlet协程，传递的time参数为0，在libevent注册一个事件，这里并不会直接出发协程的执行
+- gevent.spawn，通过timer和greenlet实现，将function包装成greenlet协程，传递的time参数为0，在libevent注册一个事件，这个协程在下一次调用Hub.switch是调用完成
 
 - threadlocal
     - get_hub，初始化hub，每个线程一个hub，hub的设计思路是：[协作式任务调度](https://segmentfault.com/a/1190000000613814)，即把当前的执行栈和某个事件做绑定，然后把执行权交出去，libevent在事件触发后尽快触发事件的执行（即把执行权又交还给原来的执行栈）
@@ -419,6 +447,10 @@ def patch_socket(): # patch socket库的例子
 ![1568121887155](./img/pyrpc.png)
 
 - python的BaseHTTPServer，第一次看到原来通过socket实现一个http server原来name简单，感谢python为我屏蔽掉了很多语言上的无用信息
+- gevent.proc，协程实现的进程（并不是多进程，而是虚拟的进程），貌似在最新的gevent里已经移除了，也可能改头换面了
+  - gevent的Hub协程管理器相当于任务管理器
+  - proc虚拟进程相当于一个执行任务的进程
+  - 如何获取任务执行结果？通过proc.link
 - gevent.proc.Source，维护了一个监听者的链接池，通过源发出的事件能被源分发到每一个监听者
 - gevent.proc.Proc，通过Source实现的一个可链接的执行协程，当任务完成，会自动通知所有的监听者
   - 可以传递一个协程，当完成后，监听者会收到一个LinkedCompleted的exception
@@ -463,3 +495,81 @@ class Waiter(object):
 
 - 多继承如何初始化，或调用父类方法？
   - 初始化本应该通过super方法完成，但是，看了这个代码，其实可以直接通过super_cls.method(self)的方式调用
+
+## tag 0.9.1
+
+- 将init.py中的greenlet类库移动到greenlet.py
+- InteractiveConsole，read-eval-print
+  - SocketConsole，通过协程实现的一个tcp-python后门，通过gevent.tcp_listener和gevent.tcp_server实现
+  - tcp_listener，绑定端口并返回socket fd
+  - tcp_server，accept，协程处理
+- 兼容了python2.6和python2.4
+- 优化了hub.switch中的core.dispatch出错问题，这个修复只是简单的重试15次，这个实现作者表示再也不会出现问题了。。。
+
+## tag 0.9.2
+
+- 改进了GreenSocket重写了GreenSSL
+  - 改进了GreenSocket的所有recv方法，统一写成先wait_reader，再进行read
+- core.active_event，优化了gevent的整体速度，因为之前用的是timer，只是把timer加到事件队列里面，并激活事件
+  - 在spawn函数里替换掉了原来的core.timer为core.active_event，其实我之前就觉得怪怪的，不过如果不知道event_active api，我也会用timer的方式实现
+  - active_event可以优化timer的理解，原本timer是add一个时间为0的timer触发器，但时间为0的事件本身需要被libevent放入事件队列、选择事件、激活事件、调度事件触发器，直接通过active_event可以直接到激活事件那一步
+- RunningProcSet，Proc管理器，当Proc结束后，会删除该对象
+
+## tag 0.9.3
+
+- 重新实现了Queue，之前实现的Queue并不是完全兼容标准库的，直接通过collections.deque实现而不依赖coros.Queue实现
+  - 但这样造成了冗余代码？为啥不把coros.Queue改成标准库api？因为如果这样改之前所有依赖coros.Queue的代码都需要改。。。所以，在changelog了作者写了需要deprecate掉Queue和Channel（读者和作者的心意吻合了，异常舒爽）
+  - 另一个问题是，这个Queue并不是一个先进先出的一个Queue（一个是因为set的pop是随机的，另一个是循环调度的实现导致），不知道作者怎么想的
+  - 里面的get和put操作相当经典，我看过的两个协程框架都是这么实现的（之前那个是multitask），通过协程实现的框架不是很好理解，因为实现get和put操作不是简单的去get和put操作数据结构，而是需要先做一些别的事情
+  - 调度，使用这是_event_unlock对象进行调度，调度完设置为None
+    - 循环调度：如果队列中有元素，并且有getter，则get一个元素通过getter.switch的方式传递过去，如果前一个条件不满足，且有putter和getter，则直接把putter中的item给getter（这个情况可能是想兼容Queue的size为0的情况），先switch到getter，再switch到putter，如果前两个条件不符合，但是当前有putter并且当前队列未满，则可以进行put
+  - get操作
+    - 如果队列中有元素（如果此时有putter，则先调度一波，这个逻辑其实很别扭），再从队列中直接pop返回
+    - 如果是get_no_wait的，如果队列有元素则走第一种情况，如果队列为空，则看现在有没有putter，如果有putter，则从putter中挑一个出来给
+    - 如果是get_wait的，则把当前getter加入等待列表，如果当前有putter，则先调度一波，再getter进入等待，而调度的过程又会先处理之前的getter列表，反正感觉逻辑很乱。。。
+  - put操作，和get操作差不多
+- 修复了select的timeout问题。。。这个select里的timeout参数不就摆设吗？
+- spawn和spawn_later性能问题，只是把“闭包”改成了直接调用就能提升50%的性能？
+
+```python
+# 改进前
+def spawn(function, *args, **kwargs):
+    g = Greenlet(lambda : function(*args, **kwargs))
+    g.parent = get_hub().greenlet
+    core.active_event(g.switch)
+    return g
+def spawn_later(seconds, function, *args, **kwargs):
+    g = Greenlet(lambda : function(*args, **kwargs))
+    g.parent = get_hub().greenlet
+    core.timer(seconds, g.switch)
+    return g
+# 改进后
+def _switch_helper(function, args, kwargs):
+    # work around the fact that greenlet.switch does not support keyword args
+    # 当时的Greenlet.switch还不支持kwargs
+    return function(*args, **kwargs)
+def spawn(function, *args, **kwargs):
+    if kwargs:
+        g = Greenlet(_switch_helper, get_hub().greenlet)
+        core.active_event(g.switch, function, args, kwargs)
+        return g
+    else:
+        g = Greenlet(function, get_hub().greenlet)
+        core.active_event(g.switch, *args)
+        return g
+def spawn_later(seconds, function, *args, **kwargs):
+    if kwargs:
+        g = Greenlet(_switch_helper, get_hub().greenlet)
+        core.timer(seconds, g.switch, function, args, kwargs)
+        return g
+    else:
+        g = Greenlet(function, get_hub().greenlet)
+        core.timer(seconds, g.switch, *args)
+        return g
+```
+
+## tag 0.10.0
+
+- timeout api的优化，作者描述成不向后兼容的更新，其实还好，也就是在enter的时候才start timer而已，不过直接把Timeout类作为抛出异常的类还是很骚的
+- 扩展了greenlet类的方法，通过继承override、新增等方式实现
+  - link，终于把之前的“协程进程任务”实现的link通过方法的方式暴露出来了，也是优化了gevent的用法，实际就是注册了一个回调函数
