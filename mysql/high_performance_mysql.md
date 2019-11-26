@@ -238,7 +238,6 @@ server side curser和client side curser
 ### 命令
 
 - 查看表定义，show create table
-
 - 查看表状态，show table status
 
   - row_format，Dynamic表示行中包含变长字符串
@@ -267,6 +266,8 @@ server side curser和client side curser
   - possible_keys，可能用到的key，如果没有可用的，可能需要自己去建立一下索引
   - key，实际使用的key
   - key_len，实际使用的索引的字节数
+- information_schema.innodb_trx事务运行时间查询
+- 慢查询记录，通过slow_query变量
 
 ## 思考
 
