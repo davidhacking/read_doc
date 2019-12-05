@@ -210,7 +210,7 @@ if __name__ == '__main__':
                    year=5
                ),
                credit_house=CreditMoney(
-                   money=2600000,
+                   money=1050000,
                    interest=0.049,
                    year=30
                ))
